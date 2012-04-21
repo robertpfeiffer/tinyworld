@@ -7,6 +7,7 @@ class planet(object):
         self.diam=diam
         self.mass=mass
         self.orient=None
+        self.rest=True
 
 class small_body(object):
     def __init__(self,pos,speed):
