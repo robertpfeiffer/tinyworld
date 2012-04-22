@@ -1,6 +1,7 @@
-import pygame,math,random
-from pygame.locals import *
+import pygame
+#from pygame.locals import *
 import gravity
+import webbrowser
 
 # HACK: uncomment this line only on win32 when packaging
 # import pygame._view # for py2exe
@@ -14,6 +15,8 @@ screen = pygame.display.set_mode([640,480],pygame.DOUBLEBUF)
 screen.fill([0,0,0])
 
 aim_png = pygame.image.load("aim.png")
+blue_png = pygame.image.load("blue.png")
+red_png = pygame.image.load("red.png")
 
 human_png = pygame.image.load("stick.png")
 arrow_png = pygame.image.load("arrow.png")
@@ -29,7 +32,11 @@ def rot_img(sprite):
     if angle:
         if hasattr(sprite,"down") and sprite.down==-1:
             angle+=180
-        sprite.image=pygame.transform.rotate(sprite.image_orig,angle)
+        if hasattr(sprite,"direction") and sprite.direction==1:
+            img = pygame.transform.flip(sprite.image_orig,True,False)
+            sprite.image=pygame.transform.rotate(img,angle)
+        else:
+            sprite.image=pygame.transform.rotate(sprite.image_orig,angle)
         sprite.mask=pygame.mask.from_surface(sprite.image)
         center=sprite.rect.center
         sprite.rect=sprite.image.get_rect()
@@ -47,20 +54,21 @@ class Planet(pygame.sprite.DirtySprite):
         self.layer=0
 
 class Player(pygame.sprite.DirtySprite):
-    def __init__(self,pos,name):
+    def __init__(self,pos,name,img):
         pygame.sprite.DirtySprite.__init__(self)
         self.ammo={"bow":5,"bazooka":-1,"rocket":1,"bat":2}
         self.physics=gravity.small_body(pos,(0,0))
         self.physics.orient="acceleration"
         self.name=name
         self.down=-1
-        self.image_orig=human_png
+        self.image_orig=img
         self.image=self.image_orig
         self.rect=self.image.get_rect()
         self.rect.center=pos
         self.health=100
         self.invincibletime=0
         self.layer=1
+        self.direction=0
 
 class Arrow(pygame.sprite.DirtySprite):
     def __init__(self,pos,aim,force):
@@ -146,8 +154,8 @@ while newgame:
  #moon=Planet((430,90),40,400*1000,moon_png)
  #moon2=Planet((550,290),25,200*1000,moon_png)
 
- player1=Player((590,50),"one")
- player2=Player((10,50),"two")
+ player1=Player((590,50),"blue/one",blue_png)
+ player2=Player((10,50),"red/two",red_png)
 
  spritegroup1=pygame.sprite.Group(player1,player2)
  playersgroup=spritegroup1
@@ -160,7 +168,9 @@ while newgame:
  font=pygame.font.Font("Ostrich Black.ttf",70)
  font2=pygame.font.Font("orbitron-black.ttf",20)
 
- direction = 0
+ currentplayer = player1
+ otherplayer = player2
+
  mode = "walk"
  weapon= "bow"
  shoot_angle = 0
@@ -169,9 +179,6 @@ while newgame:
  background.fill((50,50,75))
  world=screen.copy()
  hud=screen.copy().convert_alpha()
-
- currentplayer = player1
- otherplayer = player2
 
  turn_begin=pygame.time.get_ticks()
  wait_begin=pygame.time.get_ticks()
@@ -205,6 +212,9 @@ while newgame:
         newgame=False
         break
 
+    if keys[pygame.K_r] and mode=="over":
+        webbrowser.open("http://www.ludumdare.com/compo/ludum-dare-23/?action=preview&uid=7968")
+
     if mode == "walk":
         if keys[pygame.K_UP] and currentplayer.physics.rest==True:
             up=gravity.rot(gravity.orient(currentplayer.physics),180)
@@ -215,10 +225,10 @@ while newgame:
         if keys[pygame.K_RETURN] and currentplayer.physics.rest==True:
             up=gravity.rot(gravity.orient(currentplayer.physics),180)
             currentplayer.physics.pos = gravity.add(currentplayer.physics.pos,gravity.scale(up,2))
-            if direction==0:
+            if currentplayer.direction==0:
                 left=gravity.rot(gravity.orient(currentplayer.physics),135)
                 currentplayer.physics.speed=gravity.scale(left,80)
-            elif direction==1:
+            elif currentplayer.direction==1:
                 right=gravity.rot(gravity.orient(currentplayer.physics),-135)
                 currentplayer.physics.speed=gravity.scale(right,80)
             currentplayer.physics.rest=False
@@ -227,13 +237,13 @@ while newgame:
             left=gravity.rot(gravity.orient(currentplayer.physics),135)
             currentplayer.physics.pos = gravity.add(currentplayer.physics.pos,gravity.scale(left,2))
             currentplayer.physics.rest=False
-            direction = 0
+            currentplayer.direction = 0
             currentplayer.dirty=1
         if keys[pygame.K_RIGHT] and currentplayer.physics.rest==True:
             right=gravity.rot(gravity.orient(currentplayer.physics),-135)
             currentplayer.physics.pos = gravity.add(currentplayer.physics.pos,gravity.scale(right,2))
             currentplayer.physics.rest=False
-            direction = 1
+            currentplayer.direction = 1
             currentplayer.dirty=1
         if keys[pygame.K_1] and currentplayer.physics.rest==True:
             if currentplayer.ammo["bow"]!=0:
@@ -258,9 +268,9 @@ while newgame:
             if shoot_angle < 90:
                 shoot_angle += 2.5
         if keys[pygame.K_LEFT]:
-            direction=0
+            currentplayer.direction=0
         if keys[pygame.K_RIGHT]:
-            direction=1
+            currentplayer.direction=1
         if keys[pygame.K_DOWN]:
             if shoot_angle > - 90:
                 shoot_angle -= 2.5
@@ -289,10 +299,10 @@ while newgame:
         and not keys[pygame.K_SPACE] 
         and mode == "shoot"):
         projectile = None
-        if direction==0:
+        if currentplayer.direction==0:
             aim_vec=gravity.rot(gravity.orient(currentplayer.physics),
                                 90+shoot_angle)
-        if direction==1:
+        if currentplayer.direction==1:
             aim_vec=gravity.rot(gravity.orient(currentplayer.physics),
                                -(90+shoot_angle))
         if weapon == "bow":
@@ -404,7 +414,7 @@ while newgame:
         s = (4 + shoot_time / 3) * 10
         surf=pygame.transform.scale(aim_png,(s,min(32,s)))
         angle=gravity.get_angle(currentplayer.physics)
-        if direction == 0:
+        if currentplayer.direction == 0:
             ov = pygame.transform.rotate(surf,180-shoot_angle+angle)
             r = ov.get_rect()
             r.center = currentplayer.rect.center
@@ -462,6 +472,11 @@ while newgame:
         ren = font2.render("press N for new game, Q to quit"
                            ,1,(255,255,255))
         hud.blit(ren,(100,250))
+
+        ren = font2.render("press R to rate the game (opens in browser)"
+                           ,1,(255,255,255))
+        hud.blit(ren,(100,290))
+
 
     screen.blit(hud,(0,0))
     pygame.display.flip()
